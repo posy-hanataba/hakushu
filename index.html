@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff3f5">
+  <title>今日の拍手</title>
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      padding: 24px 16px 32px;
+      font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #4a4044;
+      background: #fff3f5;
+    }
+    main { max-width: 480px; margin: 0 auto; }
+    h1 {
+      margin: 0 0 20px;
+      font-size: 20px;
+      font-weight: 600;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .label { margin: 0 0 8px; font-size: 14px; color: #8a7a80; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .example {
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 15px;
+      color: #4a4044;
+      text-align: left;
+      background: #fff;
+      border: 1px solid #f0cfd6;
+      border-radius: 20px;
+    }
+    .example.selected { background: #fde8ec; border-color: #e8a3b1; }
+    textarea {
+      width: 100%;
+      min-height: 88px;
+      padding: 12px;
+      font: inherit;
+      color: inherit;
+      background: #fff;
+      border: 1px solid #f0cfd6;
+      border-radius: 12px;
+      resize: vertical;
+    }
+    button:focus-visible, textarea:focus {
+      outline: 2px solid #e8a3b1;
+      outline-offset: 2px;
+    }
+    #send {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 16px;
+      font: inherit;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      background: #e2879a;
+      border: none;
+      border-radius: 28px;
+    }
+    #message {
+      min-height: 56px;
+      margin-top: 20px;
+      text-align: center;
+      white-space: pre-line;
+    }
+    #message.soft { color: #9a6b76; }
+
+    /* 書き出し・読み込み（小さく） */
+    .tools {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 8px;
+    }
+    .tool {
+      padding: 6px 4px;
+      font: inherit;
+      font-size: 13px;
+      color: #9a8a90;
+      text-decoration: underline;
+      background: none;
+      border: none;
+    }
+    .tools-note {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: #a99aa0;
+      text-align: center;
+    }
+
+    /* ===== 拍手したあとの画面（シャボン玉） ===== */
+    #doneMessage {
+      margin: 0 0 12px;
+      text-align: center;
+      white-space: pre-line;
+    }
+    #storeNote {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: #9a6b76;
+      text-align: center;
+      white-space: pre-line;
+    }
+    .stage {
+      position: relative;
+      height: 520px;
+      overflow: hidden;
+      border-radius: 20px;
+      background: linear-gradient(180deg, #fde4ea 0%, #feeef2 60%, #fff6f8 100%);
+    }
+    .sprout {
+      position: absolute;
+      left: 50%;
+      bottom: 6px;
+      width: 72px;
+      height: 72px;
+      margin-left: -36px;
+    }
+
+    /* 外側：ふわふわ動く入れもの（ここだけ transform を動かす） */
+    .float {
+      position: absolute;
+      will-change: transform;
+      animation: drift1 9s ease-in-out infinite;
+    }
+    .float.d2 { animation-name: drift2; }
+    .float.d3 { animation-name: drift3; }
+    .float.d4 { animation-name: drift4; }
+    @keyframes drift1 {
+      0%, 100% { transform: translate(0, 0); }
+      25%      { transform: translate(6px, -8px); }
+      50%      { transform: translate(-3px, -11px); }
+      75%      { transform: translate(-7px, -4px); }
+    }
+    @keyframes drift2 {
+      0%, 100% { transform: translate(0, 0); }
+      25%      { transform: translate(-7px, -6px); }
+      50%      { transform: translate(-2px, -10px); }
+      75%      { transform: translate(6px, -5px); }
+    }
+    @keyframes drift3 {
+      0%, 100% { transform: translate(0, 0); }
+      33%      { transform: translate(8px, -5px); }
+      66%      { transform: translate(2px, -10px); }
+    }
+    @keyframes drift4 {
+      0%, 100% { transform: translate(0, 0); }
+      33%      { transform: translate(-5px, -10px); }
+      66%      { transform: translate(-8px, -3px); }
+    }
+
+    /* シャボン玉（動かさない。動くのは外側の .float） */
+    .bubble {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.3;
+      color: #2b5872;
+      text-align: center;
+      word-break: break-all;
+      background: radial-gradient(circle at 32% 28%,
+        rgba(255, 255, 255, 0.8) 0%,
+        rgba(196, 231, 248, 0.55) 40%,
+        rgba(120, 196, 237, 0.45) 100%);
+      border: 1.5px solid rgba(66, 158, 214, 0.8);
+      border-radius: 50%;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bubble.small { font-size: 12px; padding: 6px; }
+    /* 左上の白い光の点 */
+    .bubble::before {
+      content: "";
+      position: absolute;
+      left: 19%;
+      top: 15%;
+      width: 15%;
+      height: 9%;
+      background: #fff;
+      border-radius: 50%;
+      opacity: 0.9;
+      transform: rotate(-32deg);
+    }
+    .bubble.selected { border-color: #2f8fca; border-width: 2.5px; }
+
+    /* 内側：キラキラ（白い✦に細い金色のふち。opacity と transform だけ動かす） */
+    .spark {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      fill: #fff;
+      stroke: #d4a017;
+      stroke-width: 1.3;
+      stroke-linejoin: round;
+      pointer-events: none;
+      animation: twinkle 3s ease-in-out infinite;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.15; transform: scale(0.7); }
+      50%      { opacity: 1;    transform: scale(1); }
+    }
+
+    /* 画面が見えていないときは止める */
+    .stage.paused .float,
+    .stage.paused .spark { animation-play-state: paused; }
+
+    /* 端末で「動きを減らす」にしている人には、止めて表示する */
+    @media (prefers-reduced-motion: reduce) {
+      .float { animation: none; }
+      .spark { animation: none; opacity: 0.9; }
+    }
+
+    #fullText {
+      min-height: 60px;
+      margin: 14px 0 0;
+      padding: 0 8px;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    #fullText.hint { font-size: 14px; color: #8a7a80; }
+    #again {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px;
+      font: inherit;
+      font-size: 16px;
+      color: #b3566b;
+      background: #fff;
+      border: 1px solid #e8a3b1;
+      border-radius: 28px;
+    }
+
+    /* どの画面にも出す、相談先への一言 */
+    .consult {
+      max-width: 480px;
+      margin: 28px auto 0;
+      padding-top: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #a08f95;
+      text-align: center;
+      border-top: 1px solid #f6dde3;
+    }
+  </style>
+</head>
+<body>
+  <!-- キラキラの形（✦）。1回だけ描いて、使い回します -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <path id="star" d="M12 1.5 C12.7 7.6 16.4 11.3 22.5 12 C16.4 12.7 12.7 16.4 12 22.5 C11.3 16.4 7.6 12.7 1.5 12 C7.6 11.3 11.3 7.6 12 1.5 Z"/>
+    </defs>
+  </svg>
+
+  <main>
+    <!-- 入力画面 -->
+    <div id="inputView">
+      <h1>今日一日、ひとつ、<br>自分に拍手できること</h1>
+
+      <p class="label">たとえば</p>
+      <div class="examples" id="examples"></div>
+
+      <label class="label" for="word">自分の言葉で書いても</label>
+      <textarea id="word" maxlength="200" placeholder="どんな小さなことでも"></textarea>
+
+      <button id="send" type="button">拍手する👏</button>
+
+      <p id="message" role="status" aria-live="polite"></p>
+
+      <div class="tools">
+        <button class="tool" id="exportButton" type="button">記録を書き出す</button>
+        <button class="tool" id="importButton" type="button">記録を読み込む</button>
+      </div>
+      <p class="tools-note">記録は、このスマホの中だけに保存されます</p>
+      <input id="importFile" type="file" accept=".json,application/json" hidden>
+    </div>
+
+    <!-- 拍手したあとの画面（シャボン玉） -->
+    <div id="bubbleView" hidden>
+      <p id="doneMessage" role="status" aria-live="polite"></p>
+      <p id="storeNote" hidden></p>
+
+      <div class="stage" id="stage">
+        <!-- 芽のイラスト（画像ファイルは使わず、線で描いています） -->
+        <svg class="sprout" viewBox="0 0 72 72" aria-hidden="true">
+          <ellipse cx="36" cy="66" rx="24" ry="5" fill="#d9c3ae"/>
+          <path d="M36 66 C36 54 36 46 36 36" fill="none" stroke="#6fae6a" stroke-width="3" stroke-linecap="round"/>
+          <path d="M36 40 C24 40 16 32 15 21 C27 21 35 28 36 40 Z" fill="#8cc884"/>
+          <path d="M36 36 C47 36 55 29 57 18 C45 18 37 25 36 36 Z" fill="#a4d79b"/>
+        </svg>
+      </div>
+
+      <p id="fullText" class="hint" aria-live="polite"></p>
+
+      <button id="again" type="button">もうひとつ拍手する</button>
+    </div>
+  </main>
+
+  <!-- 相談先への一言（窓口名は仮。あとで差しかえる） -->
+  <p class="consult" id="consult">
+    ひとりで抱えきれないときは、<br>（相談窓口の名前・仮）に話してみることもできます。
+  </p>
+
+  <script>
+    // ===== 決まりごと（あとで変えやすいように、ここにまとめています） =====
+    var EXAMPLES = [
+      'ごはんを出した',
+      '子どもの話を聞いた',
+      'イライラしたけど、こらえた',
+      '今日は休んだ（休めたのもえらい）'
+    ];
+    var STORE_KEY = 'hakushu-records-v1';  // 記録をしまう名前（変えると記録が見えなくなるので注意）
+    var FLOWERS_PER_BOUQUET = 7;  // 花束1つぶんの花の本数
+    var MAX_LENGTH = 200;         // 一言の最大文字数
+    var MAX_BUBBLES = 7;          // シャボン玉は7個まで
+    var NEAR_SPROUT = [1, 2];     // 芽の近くに置くシャボン玉の数（1〜2個）
+    var MAX_SPARKS = 15;          // 光は全部で15個まで
+    var SHORT_LENGTH = 6;         // 玉の中に出す文字数
+    var HINT = 'シャボン玉にふれると、ぜんぶ読めます';
+    var STORE_FAIL = 'いまは、この端末に記録をのこせないようです。\n拍手は、ちゃんと届いています🌷';
+
+    var inputView = document.getElementById('inputView');
+    var bubbleView = document.getElementById('bubbleView');
+    var wordBox = document.getElementById('word');
+    var sendButton = document.getElementById('send');
+    var messageBox = document.getElementById('message');
+    var examplesBox = document.getElementById('examples');
+    var doneMessage = document.getElementById('doneMessage');
+    var storeNote = document.getElementById('storeNote');
+    var stage = document.getElementById('stage');
+    var fullText = document.getElementById('fullText');
+    var againButton = document.getElementById('again');
+    var importFile = document.getElementById('importFile');
+
+    // ---------- 記録（この端末の localStorage だけに保存） ----------
+
+    var records = loadRecords();
+
+    function isValidRecord(r) {
+      return r && typeof r.text === 'string' && r.text.trim() !== '' &&
+        r.text.length <= MAX_LENGTH && !isNaN(new Date(r.t).getTime());
+    }
+
+    function loadRecords() {
+      try {
+        var raw = localStorage.getItem(STORE_KEY);
+        if (!raw) {
+          return [];
+        }
+        var list = JSON.parse(raw);
+        return Array.isArray(list) ? list.filter(isValidRecord) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // 保存できたら true、できなかったら false
+    function saveRecords() {
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify(records));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // 並び順から「何本目の花か」「何個目の花束か」をつけなおす
+    function renumber() {
+      records.forEach(function (r, i) {
+        r.flower = (i % FLOWERS_PER_BOUQUET) + 1;
+        r.bouquet = Math.floor(i / FLOWERS_PER_BOUQUET) + 1;
+      });
+    }
+
+    // ---------- 入力画面 ----------
+
+    function showExamples() {
+      EXAMPLES.forEach(function (text) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'example';
+        button.textContent = text;
+        button.addEventListener('click', function () {
+          wordBox.value = text;
+          markSelected();
+          showMessage('');
+        });
+        examplesBox.appendChild(button);
+      });
+    }
+
+    // 入力らんと同じ文言の例ボタンに色をつける
+    function markSelected() {
+      var buttons = examplesBox.querySelectorAll('.example');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.toggle('selected', buttons[i].textContent === wordBox.value);
+      }
+    }
+
+    function showMessage(text) {
+      messageBox.textContent = text;
+      messageBox.className = text ? 'soft' : '';
+    }
+
+    wordBox.addEventListener('input', markSelected);
+
+    sendButton.addEventListener('click', function () {
+      var word = wordBox.value.trim();
+      if (word === '') {
+        showMessage('例をえらぶか、一言を書いてから押してください');
+        return;
+      }
+      if (word.length > MAX_LENGTH) {
+        word = word.slice(0, MAX_LENGTH);
+      }
+
+      var count = records.length;
+      var record = {
+        t: new Date().toISOString(),
+        text: word,
+        flower: (count % FLOWERS_PER_BOUQUET) + 1,
+        bouquet: Math.floor(count / FLOWERS_PER_BOUQUET) + 1
+      };
+      records.push(record);
+      var saved = saveRecords();
+
+      wordBox.value = '';
+      markSelected();
+      showMessage('');
+      showBubbleView(record, saved);
+    });
+
+    // ---------- 書き出し・読み込み（スマホを変えるとき用） ----------
+
+    document.getElementById('exportButton').addEventListener('click', function () {
+      if (records.length === 0) {
+        showMessage('まだ記録がありません。\n拍手したら、ここから書き出せます');
+        return;
+      }
+      var data = JSON.stringify({ app: 'hakushu', version: 1, exportedAt: new Date().toISOString(), records: records });
+      var d = new Date();
+      var name = 'hakushu-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.json';
+      var blob = new Blob([data], { type: 'application/json' });
+
+      // スマホでは「共有」から保存先をえらべるようにする
+      try {
+        var file = new File([blob], name, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: '拍手の記録' }).catch(function () {});
+          return;
+        }
+      } catch (e) { /* 共有が使えないときは、下のダウンロードにする */ }
+
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      showMessage('記録を書き出しました（' + records.length + '件）');
+    });
+
+    document.getElementById('importButton').addEventListener('click', function () {
+      importFile.value = '';
+      importFile.click();
+    });
+
+    importFile.addEventListener('change', function () {
+      var file = importFile.files && importFile.files[0];
+      if (!file) {
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () { importFromText(String(reader.result)); };
+      reader.onerror = function () { showMessage('ファイルを開けませんでした。\nもう一度ためしてみてください'); };
+      reader.readAsText(file);
+    });
+
+    // 読み込んだ記録は、今の記録に「合わせて」保存する（今の記録は消さない）
+    function importFromText(text) {
+      var list;
+      try {
+        var data = JSON.parse(text);
+        list = Array.isArray(data) ? data : data.records;
+      } catch (e) {
+        list = null;
+      }
+      if (!Array.isArray(list)) {
+        showMessage('このファイルは読み込めませんでした。\n「記録を書き出す」で作ったファイルか、たしかめてみてください');
+        return;
+      }
+      var incoming = list.filter(isValidRecord);
+      var seen = {};
+      records.forEach(function (r) { seen[r.t + '|' + r.text] = true; });
+      var added = incoming.filter(function (r) {
+        var key = r.t + '|' + r.text;
+        if (seen[key]) {
+          return false;
+        }
+        seen[key] = true;
+        return true;
+      });
+      if (added.length === 0) {
+        showMessage('新しく足す記録はありませんでした');
+        return;
+      }
+      if (!confirm(added.length + '件の記録を読み込みます。\nいまの記録は消えずに、合わせて保存されます。')) {
+        return;
+      }
+      records = records.concat(added.map(function (r) {
+        return { t: new Date(r.t).toISOString(), text: r.text.trim() };
+      }));
+      records.sort(function (a, b) { return new Date(a.t) - new Date(b.t); });
+      renumber();
+      showMessage(saveRecords()
+        ? added.length + '件の記録を読み込みました🌷'
+        : '読み込んだ記録を、この端末にのこせないようです。\n時間をおいて、もう一度ためしてみてください');
+    }
+
+    // ---------- 拍手したあとの画面（シャボン玉） ----------
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function distance(x1, y1, x2, y2) {
+      var dx = x1 - x2;
+      var dy = y1 - y2;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // シャボン玉に入れる一言：今書いた一言を1つと、のこりは全部の記録からランダム
+    // （今書いた一言は records のいちばん最後に入っている）
+    function pickTexts(newWord) {
+      var others = records.slice(0, -1).map(function (r) { return r.text; });
+      for (var i = others.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = others[i];
+        others[i] = others[j];
+        others[j] = tmp;
+      }
+      return [newWord].concat(others.slice(0, MAX_BUBBLES - 1));
+    }
+
+    function showBubbleView(record, saved) {
+      doneMessage.textContent = '👏 拍手、とどきました。\n' + record.flower + '本目の花です🌷';
+      storeNote.textContent = STORE_FAIL;
+      storeNote.hidden = saved;
+      inputView.hidden = true;
+      bubbleView.hidden = false;
+      fullText.textContent = HINT;
+      fullText.className = 'hint';
+      buildBubbles(pickTexts(record.text));
+      window.scrollTo(0, 0);
+    }
+
+    againButton.addEventListener('click', function () {
+      bubbleView.hidden = true;
+      inputView.hidden = false;
+      clearBubbles();
+      window.scrollTo(0, 0);
+    });
+
+    function clearBubbles() {
+      var old = stage.querySelectorAll('.float');
+      for (var i = 0; i < old.length; i++) {
+        stage.removeChild(old[i]);
+      }
+    }
+
+    // 玉の中に出す短い文（6文字まで＋…）
+    function shortText(text) {
+      var chars = Array.from(text);
+      return chars.length > SHORT_LENGTH ? chars.slice(0, SHORT_LENGTH).join('') + '…' : text;
+    }
+
+    // シャボン玉を置く場所を決める（重ならない・芽をよける・1〜2個は芽の近く）
+    function layout(count, width, height) {
+      var PAD = 26;    // ふちからの余白（光とふわふわがはみ出さないように）
+      var GAP = 26;    // 玉と玉のあいだ（ふわふわ動いてもぶつからないように）
+      var sprout = { x: width / 2, y: height - 42, r: 44 };
+      var nearCount = Math.min(count, NEAR_SPROUT[Math.floor(Math.random() * NEAR_SPROUT.length)]);
+      var scales = [1, 0.92, 0.84, 0.76, 0.68, 0.6];
+
+      for (var s = 0; s < scales.length; s++) {
+        for (var attempt = 0; attempt < 40; attempt++) {
+          var placed = [];
+          var ok = true;
+          for (var i = 0; i < count && ok; i++) {
+            var d = Math.round(rand(80, 104) * scales[s]);
+            var r = d / 2;
+            var found = false;
+            for (var t = 0; t < 150 && !found; t++) {
+              var x, y;
+              if (i < nearCount) {
+                // 芽の上のほう、すぐそばに置く
+                var angle = rand(Math.PI * 1.1, Math.PI * 1.9);
+                var dist = rand(r + sprout.r + 10, r + sprout.r + 45);
+                x = sprout.x + Math.cos(angle) * dist;
+                y = sprout.y + Math.sin(angle) * dist;
+              } else {
+                x = rand(PAD + r, width - PAD - r);
+                y = rand(PAD + r, height - PAD - r);
+              }
+              if (x < PAD + r || x > width - PAD - r || y < PAD + r || y > height - PAD - r) {
+                continue;
+              }
+              var free = distance(x, y, sprout.x, sprout.y) >= r + sprout.r + 10;
+              for (var k = 0; k < placed.length && free; k++) {
+                free = distance(x, y, placed[k].x, placed[k].y) >= r + placed[k].d / 2 + GAP;
+              }
+              if (free) {
+                placed.push({ x: x, y: y, d: d });
+                found = true;
+              }
+            }
+            ok = found;
+          }
+          if (ok) {
+            return placed;
+          }
+        }
+      }
+
+      // どうしても置けないとき（とても小さい画面）：2列にきちんと並べる
+      var rows = Math.ceil(count / 2);
+      var cellW = (width - PAD * 2) / 2;
+      var cellH = (height - PAD * 2 - 90) / rows;
+      var size = Math.max(56, Math.floor(Math.min(cellW, cellH) - GAP));
+      var grid = [];
+      for (var n = 0; n < count; n++) {
+        grid.push({
+          x: PAD + cellW * (n % 2) + cellW / 2,
+          y: PAD + cellH * Math.floor(n / 2) + cellH / 2,
+          d: size
+        });
+      }
+      return grid;
+    }
+
+    function makeSpark(left, top, size) {
+      var ns = 'http://www.w3.org/2000/svg';
+      var svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('class', 'spark');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.left = left + 'px';
+      svg.style.top = top + 'px';
+      svg.style.width = size + 'px';
+      svg.style.height = size + 'px';
+      var twinkle = rand(2, 4);
+      svg.style.animationDuration = twinkle.toFixed(1) + 's';
+      svg.style.animationDelay = (-rand(0, twinkle)).toFixed(1) + 's';
+      var use = document.createElementNS(ns, 'use');
+      use.setAttribute('href', '#star');
+      use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#star');
+      svg.appendChild(use);
+      return svg;
+    }
+
+    // シャボン玉と光を作って並べる
+    function buildBubbles(texts) {
+      clearBubbles();
+      var count = texts.length;
+      var spots = layout(count, stage.clientWidth, stage.clientHeight);
+      // 光は1つの玉に2〜3個。全部で15個をこえないようにする
+      var sparksEach = Math.max(2, Math.min(3, Math.floor(MAX_SPARKS / count)));
+
+      texts.forEach(function (text, i) {
+        var spot = spots[i];
+        var r = spot.d / 2;
+
+        // 外側：ふわふわ動く入れもの
+        var holder = document.createElement('div');
+        holder.className = 'float d' + (1 + Math.floor(Math.random() * 4));
+        holder.style.left = (spot.x - r) + 'px';
+        holder.style.top = (spot.y - r) + 'px';
+        holder.style.width = spot.d + 'px';
+        holder.style.height = spot.d + 'px';
+        var drift = rand(7, 11);
+        holder.style.animationDuration = drift.toFixed(1) + 's';
+        holder.style.animationDelay = (-rand(0, drift)).toFixed(1) + 's';
+
+        var bubble = document.createElement('button');
+        bubble.type = 'button';
+        bubble.className = spot.d < 80 ? 'bubble small' : 'bubble';
+        bubble.textContent = shortText(text);
+        bubble.setAttribute('aria-label', text);
+        bubble.addEventListener('click', function () {
+          var all = stage.querySelectorAll('.bubble');
+          for (var k = 0; k < all.length; k++) {
+            all[k].classList.remove('selected');
+          }
+          bubble.classList.add('selected');
+          fullText.textContent = text;
+          fullText.className = '';
+        });
+        holder.appendChild(bubble);
+
+        // 内側：光を玉の外側に、ぐるりと間をあけて置く
+        var startAngle = rand(0, Math.PI * 2);
+        for (var s = 0; s < sparksEach; s++) {
+          var angle = startAngle + (Math.PI * 2 / sparksEach) * s + rand(-0.4, 0.4);
+          var size = Math.round(rand(11, 15));
+          holder.appendChild(makeSpark(
+            r + Math.cos(angle) * (r + 8) - size / 2,
+            r + Math.sin(angle) * (r + 8) - size / 2,
+            size
+          ));
+        }
+
+        stage.appendChild(holder);
+      });
+    }
+
+    // 画面が見えていないとき（タブを切りかえたときなど）は動きを止める
+    document.addEventListener('visibilitychange', function () {
+      stage.classList.toggle('paused', document.hidden);
+    });
+
+    // ---------- 最初に1回 ----------
+    showExamples();
+  </script>
+</body>
+</html>
