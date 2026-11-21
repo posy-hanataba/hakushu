@@ -103,6 +103,17 @@
       text-align: center;
       white-space: pre-line;
     }
+    #weekNote {
+      margin: 0 0 14px;
+      padding: 10px 14px;
+      font-size: 15px;
+      color: #8a5a66;
+      text-align: center;
+      white-space: pre-line;
+      background: #fff;
+      border: 1px solid #f6dde3;
+      border-radius: 14px;
+    }
     #storeNote {
       margin: 0 0 12px;
       font-size: 13px;
@@ -292,6 +303,7 @@
     <!-- 拍手したあとの画面（シャボン玉） -->
     <div id="bubbleView" hidden>
       <p id="doneMessage" role="status" aria-live="polite"></p>
+      <p id="weekNote" hidden></p>
       <p id="storeNote" hidden></p>
 
       <div class="stage" id="stage">
@@ -330,6 +342,12 @@
     var NEAR_SPROUT = [1, 2];     // 芽の近くに置くシャボン玉の数（1〜2個）
     var MAX_SPARKS = 15;          // 光は全部で15個まで
     var SHORT_LENGTH = 6;         // 玉の中に出す文字数
+    // 花束になったとき（7本目）に「今週のあなたへ。」の下に出す一行（ここからランダム）
+    var WEEK_LINES = [
+      '今日も一日、ここまで来ました',
+      'お母さんも、一人の人として、大切にされていい',
+      '毎日やっていることほど、本当はすごいことです'
+    ];
     var HINT = 'シャボン玉にふれると、ぜんぶ読めます';
     var STORE_FAIL = 'いまは、この端末に記録をのこせないようです。\n拍手は、ちゃんと届いています🌷';
 
@@ -340,6 +358,7 @@
     var messageBox = document.getElementById('message');
     var examplesBox = document.getElementById('examples');
     var doneMessage = document.getElementById('doneMessage');
+    var weekNote = document.getElementById('weekNote');
     var storeNote = document.getElementById('storeNote');
     var stage = document.getElementById('stage');
     var fullText = document.getElementById('fullText');
@@ -378,11 +397,25 @@
       }
     }
 
-    // 並び順から「何本目の花か」「何個目の花束か」をつけなおす
+    // 何番目の記録か（0から数える）から、花の番号と花束の数を決める
+    //   flower    … 何本目の花か（1〜7）
+    //   bouquet   … 何個目の花束にふくまれる花か（1, 2, 3…）
+    //   collected … この記録の時点で、できあがった花束の数（表示はしない）
+    function numbersFor(index) {
+      return {
+        flower: (index % FLOWERS_PER_BOUQUET) + 1,
+        bouquet: Math.floor(index / FLOWERS_PER_BOUQUET) + 1,
+        collected: Math.floor((index + 1) / FLOWERS_PER_BOUQUET)
+      };
+    }
+
+    // 並び順から番号をつけなおす（読み込んだあとに使う）
     function renumber() {
       records.forEach(function (r, i) {
-        r.flower = (i % FLOWERS_PER_BOUQUET) + 1;
-        r.bouquet = Math.floor(i / FLOWERS_PER_BOUQUET) + 1;
+        var n = numbersFor(i);
+        r.flower = n.flower;
+        r.bouquet = n.bouquet;
+        r.collected = n.collected;
       });
     }
 
@@ -428,13 +461,18 @@
         word = word.slice(0, MAX_LENGTH);
       }
 
-      var count = records.length;
+      var n = numbersFor(records.length);
       var record = {
         t: new Date().toISOString(),
         text: word,
-        flower: (count % FLOWERS_PER_BOUQUET) + 1,
-        bouquet: Math.floor(count / FLOWERS_PER_BOUQUET) + 1
+        flower: n.flower,
+        bouquet: n.bouquet,
+        collected: n.collected
       };
+      if (n.flower === FLOWERS_PER_BOUQUET) {
+        // 花束になったときの一行も、記録にのこしておく
+        record.weekLine = WEEK_LINES[Math.floor(Math.random() * WEEK_LINES.length)];
+      }
       records.push(record);
       var saved = saveRecords();
 
@@ -451,7 +489,13 @@
         showMessage('まだ記録がありません。\n拍手したら、ここから書き出せます');
         return;
       }
-      var data = JSON.stringify({ app: 'hakushu', version: 1, exportedAt: new Date().toISOString(), records: records });
+      var data = JSON.stringify({
+        app: 'hakushu',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        bouquets: Math.floor(records.length / FLOWERS_PER_BOUQUET),  // できあがった花束の数
+        records: records
+      });
       var d = new Date();
       var name = 'hakushu-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.json';
       var blob = new Blob([data], { type: 'application/json' });
@@ -524,7 +568,11 @@
         return;
       }
       records = records.concat(added.map(function (r) {
-        return { t: new Date(r.t).toISOString(), text: r.text.trim() };
+        var copy = { t: new Date(r.t).toISOString(), text: r.text.trim() };
+        if (typeof r.weekLine === 'string') {
+          copy.weekLine = r.weekLine;
+        }
+        return copy;
       }));
       records.sort(function (a, b) { return new Date(a.t) - new Date(b.t); });
       renumber();
@@ -558,8 +606,29 @@
       return [newWord].concat(others.slice(0, MAX_BUBBLES - 1));
     }
 
+    // 拍手したあとの言葉
+    //   7本目（7、14、21…回目）：花束になりました
+    //   2つ目の花束から（8回目〜）：「新しい花束の、◯本目です」
+    //   はじめの花束：「◯本目の花です」
+    function flowerMessage(record) {
+      if (record.flower === FLOWERS_PER_BOUQUET) {
+        return FLOWERS_PER_BOUQUET + '本目の花です。花束になりました💐';
+      }
+      if (record.bouquet >= 2) {
+        return '新しい花束の、' + record.flower + '本目です🌷';
+      }
+      return record.flower + '本目の花です🌷';
+    }
+
     function showBubbleView(record, saved) {
-      doneMessage.textContent = '👏 拍手、とどきました。\n' + record.flower + '本目の花です🌷';
+      doneMessage.textContent = '👏 拍手、とどきました。\n' + flowerMessage(record);
+      if (record.weekLine) {
+        weekNote.textContent = '今週のあなたへ。\n' + record.weekLine;
+        weekNote.hidden = false;
+      } else {
+        weekNote.textContent = '';
+        weekNote.hidden = true;
+      }
       storeNote.textContent = STORE_FAIL;
       storeNote.hidden = saved;
       inputView.hidden = true;
