@@ -109,10 +109,18 @@
       font-size: 15px;
       color: #8a5a66;
       text-align: center;
-      white-space: pre-line;
       background: #fff;
       border: 1px solid #f6dde3;
       border-radius: 14px;
+    }
+    #weekNote .week-title,
+    #weekNote .week-line { display: block; }
+    /* 最後の1〜2文字だけ次の行に落ちないように、行の長さをそろえて折り返す
+       （text-wrap が使えない古い端末では、「、」のところで折り返す） */
+    #weekNote .week-line {
+      text-wrap: balance;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
     }
     #storeNote {
       margin: 0 0 12px;
@@ -243,7 +251,40 @@
       overflow-wrap: anywhere;
     }
     #fullText.hint { font-size: 14px; color: #8a7a80; }
-    #again {
+    /* できあがった花束の数（芽の近くに小さく） */
+    .bouquet-badge {
+      position: absolute;
+      left: calc(50% + 46px);
+      bottom: 14px;
+      padding: 4px 12px;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #8a5a66;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #f0cfd6;
+      border-radius: 14px;
+    }
+
+    /* これまでの花束の一覧 */
+    .bouquet-list { display: flex; flex-direction: column; gap: 10px; }
+    .bouquet-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      font: inherit;
+      font-size: 15px;
+      color: #4a4044;
+      text-align: left;
+      background: #fff;
+      border: 1px solid #f0cfd6;
+      border-radius: 14px;
+    }
+    .bouquet-item .when { flex: 1; }
+
+    .sub {
       display: block;
       width: 100%;
       margin-top: 12px;
@@ -314,11 +355,21 @@
           <path d="M36 40 C24 40 16 32 15 21 C27 21 35 28 36 40 Z" fill="#8cc884"/>
           <path d="M36 36 C47 36 55 29 57 18 C45 18 37 25 36 36 Z" fill="#a4d79b"/>
         </svg>
+        <!-- できあがった花束の数。タップすると、これまでの花束が並ぶ -->
+        <button id="bouquetBadge" class="bouquet-badge" type="button" hidden></button>
       </div>
 
       <p id="fullText" class="hint" aria-live="polite"></p>
 
-      <button id="again" type="button">もうひとつ拍手する</button>
+      <button id="again" class="sub" type="button">もうひとつ拍手する</button>
+      <button id="backToList" class="sub" type="button" hidden>もどる</button>
+    </div>
+
+    <!-- これまでの花束の一覧 -->
+    <div id="listView" hidden>
+      <h1>これまでの花束</h1>
+      <div class="bouquet-list" id="bouquetList"></div>
+      <button id="listBack" class="sub" type="button">もどる</button>
     </div>
   </main>
 
@@ -343,12 +394,39 @@
     var MAX_SPARKS = 15;          // 光は全部で15個まで
     var SHORT_LENGTH = 6;         // 玉の中に出す文字数
     // 花束になったとき（7本目）に「今週のあなたへ。」の下に出す一行（ここからランダム）
-    var WEEK_LINES = [
-      '今日も一日、ここまで来ました',
-      'お母さんも、一人の人として、大切にされていい',
-      '毎日やっていることほど、本当はすごいことです'
+          var WEEK_LINES = [
+      '毎日、よくやってきたね。えらい！',
+      'あなたのことが大切',
+      'あなたが毎日やっていること、それはすごいことです',
+      '7つのあなたの日々に拍手します',
+      '誰も見ていなくても、ちゃんとやっててえらいね',
+      '当たり前にしてきていることに、お花が咲きました',
+      'この花束は、あなたが自分で集めたものです',
+      '小さなことに気づけるのも、ひとつの力です',
+      'できなかった日があっても、この花は減りません',
+      'ゆっくり休む日があってもいいよ',
+      'あなたの「まあ、いっか」にも、拍手を',
+      'がんばった日も、そうでない日も、ここに花があります',
+      '自分をほめるのが少しずつ上手になってきたね',
+      '今週もあなたでいてくれて、ありがとう',
+      '笑った日も、こらえた日も、どちらもえらい',
+      'ため息の数だけ、あなたは踏んばってきました',
+      'あなたのこの一週間に花束を',
+      'あなたのやさしさは、あなた自身に向けてもいい',
+      '疲れたと感じるのは、それだけ動いてきたしるしです',
+      '完ぺきじゃなくても、花はちゃんと咲きます',
+      '誰かのための時間のなかに、あなたの時間もありますように',
+      'あなたの毎日は、思っているよりずっと、ていねいです',
+      '今日書いた一言は、未来のあなたへの贈りものです',
+      'しんどい時間を越えたいまは、それだけで十分です',
+      '自分に拍手するのは、わがままではありません',
+      '来週のことは、来週のあなたにまかせて大丈夫',
+      'ゆっくりでも、花は増えていきます',
+      'この花束は、まず、あなたが受け取っていいものです',
+      'あなたが自分を大事にすることも、立派な仕事です',
+      'どの時間も、あなたとあなたの大切な存在のための時間です'
     ];
-    var HINT = 'シャボン玉にふれると、ぜんぶ読めます';
+       var HINT = 'シャボン玉にふれると、ぜんぶ読めます';
     var STORE_FAIL = 'いまは、この端末に記録をのこせないようです。\n拍手は、ちゃんと届いています🌷';
 
     var inputView = document.getElementById('inputView');
@@ -363,11 +441,18 @@
     var stage = document.getElementById('stage');
     var fullText = document.getElementById('fullText');
     var againButton = document.getElementById('again');
+    var backToListButton = document.getElementById('backToList');
+    var bouquetBadge = document.getElementById('bouquetBadge');
+    var listView = document.getElementById('listView');
+    var bouquetList = document.getElementById('bouquetList');
     var importFile = document.getElementById('importFile');
 
     // ---------- 記録（この端末の localStorage だけに保存） ----------
+    // 記録の形は前と同じ：{ t: 日時, text: 一言, flower, bouquet, collected, weekLine(7本目だけ) }
+    // 花の番号は「何番目の記録か」から決まるので、前の記録もそのまま使える
 
     var records = loadRecords();
+    var lastSaved = true;   // いちばん最近の拍手を保存できたか
 
     function isValidRecord(r) {
       return r && typeof r.text === 'string' && r.text.trim() !== '' &&
@@ -417,6 +502,28 @@
         r.bouquet = n.bouquet;
         r.collected = n.collected;
       });
+    }
+    renumber();  // 開いたときに、番号をそろえておく（保存の形は変えない）
+
+    // できあがった花束の数
+    function bouquetCount() {
+      return Math.floor(records.length / FLOWERS_PER_BOUQUET);
+    }
+
+    // 今の花束の記録（いちばん最近の記録がふくまれる花束）
+    //   1本目なら1件、5本目なら5件、7本目なら7件。上の「◯本目」と必ず同じ数になる
+    function currentBouquetRecords() {
+      if (records.length === 0) {
+        return [];
+      }
+      var start = Math.floor((records.length - 1) / FLOWERS_PER_BOUQUET) * FLOWERS_PER_BOUQUET;
+      return records.slice(start);
+    }
+
+    // できあがった花束の記録（0から数えて index 番目の花束）
+    function bouquetRecords(index) {
+      var start = index * FLOWERS_PER_BOUQUET;
+      return records.slice(start, start + FLOWERS_PER_BOUQUET);
     }
 
     // ---------- 入力画面 ----------
@@ -474,12 +581,12 @@
         record.weekLine = WEEK_LINES[Math.floor(Math.random() * WEEK_LINES.length)];
       }
       records.push(record);
-      var saved = saveRecords();
+      lastSaved = saveRecords();
 
       wordBox.value = '';
       markSelected();
       showMessage('');
-      showBubbleView(record, saved);
+      showCurrent();
     });
 
     // ---------- 書き出し・読み込み（スマホを変えるとき用） ----------
@@ -593,17 +700,22 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // シャボン玉に入れる一言：今書いた一言を1つと、のこりは全部の記録からランダム
-    // （今書いた一言は records のいちばん最後に入っている）
-    function pickTexts(newWord) {
-      var others = records.slice(0, -1).map(function (r) { return r.text; });
-      for (var i = others.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = others[i];
-        others[i] = others[j];
-        others[j] = tmp;
-      }
-      return [newWord].concat(others.slice(0, MAX_BUBBLES - 1));
+    function textsOf(list) {
+      // 同じ言葉でも、まとめずに1つずつ玉にする
+      return list.map(function (r) { return r.text; });
+    }
+
+    // 日付を「11/7」の形にする
+    function shortDate(t) {
+      var d = new Date(t);
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    // 花束の日付（1本目の日〜7本目の日。同じ日なら1つだけ）
+    function bouquetDates(list) {
+      var first = shortDate(list[0].t);
+      var last = shortDate(list[list.length - 1].t);
+      return first === last ? first : first + ' 〜 ' + last;
     }
 
     // 拍手したあとの言葉
@@ -620,30 +732,99 @@
       return record.flower + '本目の花です🌷';
     }
 
-    function showBubbleView(record, saved) {
-      doneMessage.textContent = '👏 拍手、とどきました。\n' + flowerMessage(record);
-      if (record.weekLine) {
-        weekNote.textContent = '今週のあなたへ。\n' + record.weekLine;
-        weekNote.hidden = false;
-      } else {
-        weekNote.textContent = '';
+    // 「今週のあなたへ。」と一行（なければかくす）
+    function setWeekNote(line) {
+      weekNote.textContent = '';
+      if (!line) {
         weekNote.hidden = true;
+        return;
       }
-      storeNote.textContent = STORE_FAIL;
-      storeNote.hidden = saved;
-      inputView.hidden = true;
-      bubbleView.hidden = false;
-      fullText.textContent = HINT;
-      fullText.className = 'hint';
-      buildBubbles(pickTexts(record.text));
+      var title = document.createElement('span');
+      title.className = 'week-title';
+      title.textContent = '今週のあなたへ。';
+      var body = document.createElement('span');
+      body.className = 'week-line';
+      body.textContent = line;
+      weekNote.appendChild(title);
+      weekNote.appendChild(body);
+      weekNote.hidden = false;
+    }
+
+    // 画面を1つだけ見せる
+    function showView(view) {
+      inputView.hidden = view !== inputView;
+      bubbleView.hidden = view !== bubbleView;
+      listView.hidden = view !== listView;
+      if (view !== bubbleView) {
+        clearBubbles();
+      }
       window.scrollTo(0, 0);
     }
 
+    // 拍手したあとの画面：今の花束のシャボン玉
+    function showCurrent() {
+      var record = records[records.length - 1];
+      doneMessage.textContent = '👏 拍手、とどきました。\n' + flowerMessage(record);
+      setWeekNote(record.weekLine);
+      storeNote.textContent = STORE_FAIL;
+      storeNote.hidden = lastSaved;
+      var count = bouquetCount();
+      bouquetBadge.textContent = '💐 × ' + count;
+      bouquetBadge.setAttribute('aria-label', 'これまでの花束を見る');
+      bouquetBadge.hidden = count === 0;
+      againButton.hidden = false;
+      backToListButton.hidden = true;
+      fullText.textContent = HINT;
+      fullText.className = 'hint';
+      showView(bubbleView);
+      buildBubbles(textsOf(currentBouquetRecords()), !bouquetBadge.hidden);
+    }
+
+    // これまでの花束の一覧（新しい花束が上）
+    function showList() {
+      bouquetList.textContent = '';
+      for (var b = bouquetCount() - 1; b >= 0; b--) {
+        (function (index) {
+          var list = bouquetRecords(index);
+          var item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'bouquet-item';
+          var icon = document.createElement('span');
+          icon.textContent = '💐';
+          icon.setAttribute('aria-hidden', 'true');
+          var when = document.createElement('span');
+          when.className = 'when';
+          when.textContent = bouquetDates(list) + ' の花束';
+          item.appendChild(icon);
+          item.appendChild(when);
+          item.addEventListener('click', function () { showPast(index); });
+          bouquetList.appendChild(item);
+        })(b);
+      }
+      showView(listView);
+    }
+
+    // できあがった花束を1つ、シャボン玉で見る
+    function showPast(index) {
+      var list = bouquetRecords(index);
+      doneMessage.textContent = bouquetDates(list) + ' の花束💐';
+      setWeekNote(list[list.length - 1].weekLine);
+      storeNote.hidden = true;
+      bouquetBadge.hidden = true;
+      againButton.hidden = true;
+      backToListButton.hidden = false;
+      fullText.textContent = HINT;
+      fullText.className = 'hint';
+      showView(bubbleView);
+      buildBubbles(textsOf(list), false);
+    }
+
+    bouquetBadge.addEventListener('click', showList);
+    backToListButton.addEventListener('click', showList);
+    document.getElementById('listBack').addEventListener('click', showCurrent);
+
     againButton.addEventListener('click', function () {
-      bubbleView.hidden = true;
-      inputView.hidden = false;
-      clearBubbles();
-      window.scrollTo(0, 0);
+      showView(inputView);
     });
 
     function clearBubbles() {
@@ -659,11 +840,15 @@
       return chars.length > SHORT_LENGTH ? chars.slice(0, SHORT_LENGTH).join('') + '…' : text;
     }
 
-    // シャボン玉を置く場所を決める（重ならない・芽をよける・1〜2個は芽の近く）
-    function layout(count, width, height) {
+    // シャボン玉を置く場所を決める（重ならない・芽と花束の数をよける・1〜2個は芽の近く）
+    function layout(count, width, height, withBadge) {
       var PAD = 26;    // ふちからの余白（光とふわふわがはみ出さないように）
       var GAP = 26;    // 玉と玉のあいだ（ふわふわ動いてもぶつからないように）
       var sprout = { x: width / 2, y: height - 42, r: 44 };
+      var avoid = [sprout];
+      if (withBadge) {
+        avoid.push({ x: width / 2 + 84, y: height - 28, r: 42 });  // 「💐 × 3」のあたり
+      }
       var nearCount = Math.min(count, NEAR_SPROUT[Math.floor(Math.random() * NEAR_SPROUT.length)]);
       var scales = [1, 0.92, 0.84, 0.76, 0.68, 0.6];
 
@@ -690,7 +875,10 @@
               if (x < PAD + r || x > width - PAD - r || y < PAD + r || y > height - PAD - r) {
                 continue;
               }
-              var free = distance(x, y, sprout.x, sprout.y) >= r + sprout.r + 10;
+              var free = true;
+              for (var a = 0; a < avoid.length && free; a++) {
+                free = distance(x, y, avoid[a].x, avoid[a].y) >= r + avoid[a].r + 10;
+              }
               for (var k = 0; k < placed.length && free; k++) {
                 free = distance(x, y, placed[k].x, placed[k].y) >= r + placed[k].d / 2 + GAP;
               }
@@ -744,10 +932,14 @@
     }
 
     // シャボン玉と光を作って並べる
-    function buildBubbles(texts) {
+    function buildBubbles(texts, withBadge) {
       clearBubbles();
+      texts = texts.slice(0, MAX_BUBBLES);
       var count = texts.length;
-      var spots = layout(count, stage.clientWidth, stage.clientHeight);
+      if (count === 0) {
+        return;
+      }
+      var spots = layout(count, stage.clientWidth, stage.clientHeight, withBadge);
       // 光は1つの玉に2〜3個。全部で15個をこえないようにする
       var sparksEach = Math.max(2, Math.min(3, Math.floor(MAX_SPARKS / count)));
 
